@@ -87,60 +87,47 @@ A simplified implementation of VMware Tanzu Data Management Console architecture
 
 ## Quick Start
 
-### 1. Provision infrastructure with Terraform
+### One command to rule them all
 
 ```bash
-cd terraform
-terraform init
-terraform apply
+./scripts/quick-start.sh
 ```
 
-Creates namespaces (`mini-tdmc-control-plane`, `mini-tdmc-data-plane`) and deploys the Inventory Service Helm chart.
+This runs all setup steps (~3-5 minutes): provisions infrastructure, builds images, deploys all services.
 
-### 2. Deploy remaining services
+### Or step by step
 
 ```bash
-# RabbitMQ
-kubectl apply -f k8s/base/rabbitmq.yaml
-
-# PostgresInstance CRD
-kubectl apply -f k8s/crds/postgresinstance-crd.yaml
-
-# Connector App (with RBAC)
-kubectl apply -f k8s/base/connector.yaml
-
-# GraphQL Gateway
-kubectl apply -f k8s/base/gateway.yaml
-
-# Observability
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  -n monitoring --create-namespace \
-  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
-
-# ServiceMonitor for Inventory Service
-kubectl apply -f k8s/base/servicemonitor.yaml
+./scripts/01-setup-cluster.sh    # Terraform: namespaces + CRD + Helm release
+./scripts/02-build-images.sh     # Docker: build all 3 service images
+./scripts/03-deploy-all.sh       # K8s: deploy RabbitMQ, Gateway, Connector, Prometheus
+./scripts/04-demo.sh             # Demo: create instance, show full E2E flow
+./scripts/05-teardown.sh         # Cleanup: remove everything
 ```
 
-### 3. Test the full E2E flow
+### Demo the full E2E flow
 
 ```bash
-# Create a PostgreSQL instance via the GraphQL Gateway
-kubectl run curl-test --rm -it --image=curlimages/curl --restart=Never \
-  -n mini-tdmc-control-plane -- curl -s -X POST \
-  http://gateway.mini-tdmc-control-plane.svc.cluster.local:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation { createInstance(input: {name: \"my-postgres\", serviceType: \"POSTGRESQL\", plan: \"large\"}) { id name status } }"}'
-
-# Verify the Custom Resource was created in the data plane
-kubectl get pgi -n mini-tdmc-data-plane
+./scripts/04-demo.sh
 ```
 
-### 4. Access Grafana
+This creates a PostgreSQL instance through the full pipeline and shows every hop:
+`Client → Gateway → Inventory Service → RabbitMQ → Connector → K8s CRD`
+
+### Access Grafana
 
 ```bash
 kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
-# Open http://localhost:3000 (admin / prom-operator)
+```
+Open http://localhost:3000 — login: `admin` / `admin`
+
+### Useful commands
+
+```bash
+kubectl get pods -n mini-tdmc-control-plane     # All services
+kubectl get pgi -n mini-tdmc-data-plane          # Custom Resources
+kubectl logs -n mini-tdmc-control-plane -l app=connector --tail=10   # Connector logs
+kubectl logs -n mini-tdmc-control-plane -l app.kubernetes.io/name=mini-tdmc-inventory --tail=10  # Inventory logs
 ```
 
 ## Event Flow
