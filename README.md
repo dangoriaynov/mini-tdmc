@@ -278,8 +278,24 @@ mini-tdmc/
 - **Observability** — Micrometer → Prometheus → Grafana pipeline with ServiceMonitor CRDs
 - **Infrastructure as Code** — Terraform for provisioning, Helm for application packaging
 - **Air-gapped deployment** — `helm package` + `docker save/load` workflow
-- **Chaos debugging** — OOMKilled, ImagePullBackOff, CrashLoopBackOff diagnosis
+- **Debugging common K8s failure modes** — OOMKilled, ImagePullBackOff, CrashLoopBackOff diagnosis
+
+## Design Decisions and Trade-offs
+
+- **RabbitMQ over Kafka** — TDMC's event flow is task-oriented (request → process → acknowledge). RabbitMQ's message acknowledgment model is a natural fit. Kafka's strengths (replay, high-throughput streaming, ordered logs) aren't needed here. Additionally, RabbitMQ's exchange routing directs messages to per-service-type Connectors without consumer-side filtering.
+- **GraphQL stitching over Federation** — Stitching is gateway-driven: downstream services expose standard GraphQL and the gateway handles composition. Federation requires each service to declare `@key`/`@extends` directives. Stitching was chosen because it doesn't require modifying downstream services — the gateway owns the composition logic.
+- **Namespaces instead of separate clusters** — Real TDMC uses separate K8s clusters for blast radius isolation and regulatory compliance. For local development, namespaces provide the same logical separation with lower overhead. The architecture is the same — only the isolation boundary differs.
+- **Node.js for Connector and Gateway** — Faster iteration cycle than Java for I/O-bound services (RabbitMQ consumer, HTTP proxy). In production TDMC, the Connector is Java/Spring Boot for consistency with the rest of the stack.
+
+## Roadmap
+
+- Operator reconciliation loop — watch PostgresInstance CRs and provision actual StatefulSets
+- Observer Service — metadata sync via HTTP callbacks (second TDMC event flow)
+- Integration tests with Testcontainers (real PostgreSQL + RabbitMQ) and Fabric8 KubernetesMockServer
+- Image signing with cosign, SBOM generation via Syft, CVE scanning with Trivy in CI
+- Helm chart dependencies — bundle RabbitMQ as a subchart
+- kind-based E2E test pipeline — spin up cluster, deploy, verify, tear down
 
 ## Author
 
-Dan Goriaynov — built as interview preparation for Tanzu Division Senior SWE role.
+Built over ~2 weeks in evenings as a hands-on way to learn the cloud-native architecture patterns used in modern data management platforms.
