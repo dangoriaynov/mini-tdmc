@@ -4,6 +4,11 @@ echo "  Mini TDMC — Teardown"
 echo "============================================"
 echo ""
 
+echo "Stopping port-forwards..."
+pkill -f "port-forward.*monitoring-grafana" 2>/dev/null || true
+pkill -f "port-forward.*svc/rabbitmq" 2>/dev/null || true
+pkill -f "port-forward.*svc/gateway" 2>/dev/null || true
+
 echo "Removing observability stack..."
 helm uninstall monitoring -n monitoring 2>/dev/null || true
 kubectl delete namespace monitoring 2>/dev/null || true

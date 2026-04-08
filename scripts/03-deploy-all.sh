@@ -52,10 +52,30 @@ kubectl wait --for=condition=ready pod -l app=connector -n $NS --timeout=60s 2>/
 echo ""
 echo "============================================"
 echo "  Step 3 COMPLETE — All services deployed"
+# Kill any existing port-forwards
+echo "Starting port-forwards (background)..."
+pkill -f "port-forward.*monitoring-grafana" 2>/dev/null || true
+pkill -f "port-forward.*svc/rabbitmq" 2>/dev/null || true
+pkill -f "port-forward.*svc/gateway" 2>/dev/null || true
+
+# Start all port-forwards
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80 >/dev/null 2>&1 &
+kubectl port-forward -n $NS svc/rabbitmq 15672:15672 >/dev/null 2>&1 &
+kubectl port-forward -n $NS svc/gateway 4000:4000 >/dev/null 2>&1 &
+sleep 2
+
+echo ""
+echo "============================================"
+echo "  Step 3 COMPLETE — All services deployed"
 echo "============================================"
 echo ""
 echo "  Pods:"
 kubectl get pods -n $NS --no-headers | awk '{printf "    %-50s %s\n", $1, $3}'
+echo ""
+echo "  Browser access:"
+echo "    Grafana (dashboards + metrics):  http://localhost:3000   (admin / admin)"
+echo "    RabbitMQ Management (queues):    http://localhost:15672  (guest / guest)"
+echo "    GraphQL Playground (API):        http://localhost:4000/graphql"
 echo ""
 echo "  Next: ./scripts/04-demo.sh"
 echo "============================================"
