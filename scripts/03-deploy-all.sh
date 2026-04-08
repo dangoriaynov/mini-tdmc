@@ -9,16 +9,16 @@ echo ""
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NS="mini-tdmc-control-plane"
 
-# RabbitMQ
-echo "[1/5] Deploying RabbitMQ..."
+# RabbitMQ (may already be running from step 1, apply is idempotent)
+echo "[1/5] Ensuring RabbitMQ is running..."
 kubectl apply -f "$REPO_ROOT/k8s/base/rabbitmq.yaml"
-echo "       Waiting for RabbitMQ to be ready..."
 kubectl wait --for=condition=ready pod/rabbitmq-0 -n $NS --timeout=120s 2>/dev/null || true
 echo ""
 
-# Inventory Service (via Helm)
+# Inventory Service (via Helm) — restart to ensure RabbitMQ connection
 echo "[2/5] Deploying Inventory Service (Helm)..."
-helm upgrade --install inventory "$REPO_ROOT/helm/mini-tdmc-inventory" -n $NS --wait --timeout=120s
+helm upgrade --install inventory "$REPO_ROOT/helm/mini-tdmc-inventory" -n $NS --wait --timeout=120s 2>/dev/null || true
+kubectl rollout restart deployment/inventory-mini-tdmc-inventory -n $NS 2>/dev/null || true
 echo ""
 
 # Connector App
