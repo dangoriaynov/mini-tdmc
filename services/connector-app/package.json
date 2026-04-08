@@ -1,0 +1,12 @@
+  {                                                                                                  
+    "name": "mini-tdmc-connector",
+    "version": "1.0.0",                                                                              
+    "type": "module",                                                              
+    "scripts": {          
+      "start": "node src/index.js"        
+    },                                                                                               
+    "dependencies": {           
+      "amqplib": "^0.10.0",                                                                          
+      "@kubernetes/client-node": "^1.0.0"                                          
+    }                      
+  }  

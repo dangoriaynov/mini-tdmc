@@ -1,0 +1,45 @@
+  apiVersion: apps/v1                                                                                 
+  kind: Deployment                                                                                    
+  metadata:                                                                                           
+    name: inventory-service                                                                           
+    namespace: mini-tdmc-control-plane                                                                
+    labels:                                                                        
+      app: inventory-service                                                                          
+  spec:                    
+    replicas: 1                                                                                       
+    selector:                                                                      
+      matchLabels:                        
+        app: inventory-service
+    template:            
+      metadata:              
+        labels:                 
+          app: inventory-service
+      spec:                                                                                           
+        containers:                      
+          - name: inventory-service                                                                   
+            image: mini-tdmc/inventory-service:latest                              
+            imagePullPolicy: Never
+            ports:                        
+              - containerPort: 4001
+            envFrom:     
+              - configMapRef:            
+                  name: inventory-config
+            resources:      
+              requests:                                                                               
+                memory: "256Mi"           
+                cpu: "250m"                                                                           
+              limits:                                                              
+                memory: "512Mi"
+                cpu: "500m"              
+            readinessProbe:
+              httpGet:                                                                                
+                path: /actuator/health
+                port: 4001                                                                            
+              initialDelaySeconds: 15                                              
+              periodSeconds: 5           
+            livenessProbe:   
+              httpGet:          
+                path: /actuator/health
+                port: 4001                                                                            
+              initialDelaySeconds: 30
+              periodSeconds: 10  

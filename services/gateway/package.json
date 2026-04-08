@@ -1,0 +1,15 @@
+  {                                                                                                  
+    "name": "mini-tdmc-gateway",                                                                     
+    "version": "1.0.0",                                                                              
+    "type": "module",                                                                                
+    "scripts": {                                                                                     
+      "start": "node src/index.js"                                                                   
+    },                                                                             
+    "dependencies": {                               
+      "graphql-yoga": "^5.0.0",                
+      "graphql": "^16.8.0",                                                                          
+      "@graphql-tools/stitch": "^9.0.0",                                                             
+      "@graphql-tools/wrap": "^10.0.0",                                                              
+      "@graphql-tools/executor-http": "^1.0.0"                                                       
+    }                                                                              
+  }  

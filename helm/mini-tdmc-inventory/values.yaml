@@ -1,0 +1,56 @@
+replicaCount: 1
+
+image:
+  repository: mini-tdmc/inventory-service
+  pullPolicy: Never
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 4001
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 4001
+  initialDelaySeconds: 15
+  periodSeconds: 5
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 4001
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+config:
+  SPRING_PROFILES_ACTIVE: "kubernetes"
+  SERVER_PORT: "4001"
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus"
+  MANAGEMENT_METRICS_TAGS_APPLICATION: "inventory-service"
+
+springAutoConfigExclude: "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration"
+
+rabbitmq:
+  enabled: "true"
+  host: "rabbitmq.mini-tdmc-control-plane.svc.cluster.local"
+  port: "5672"
+  username: "guest"
+  password: "guest"
+
+serviceAccount:
+  create: false
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false

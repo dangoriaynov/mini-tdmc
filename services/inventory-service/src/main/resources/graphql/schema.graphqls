@@ -1,0 +1,24 @@
+  type Query {                                                                                       
+      instances: [ServiceInstance!]!                                                                 
+      instance(id: ID!): ServiceInstance                                                             
+  }                                                                                                  
+                                                                                   
+  type Mutation {                                                                                    
+      createInstance(input: CreateInstanceInput!): ServiceInstance!                                  
+      deleteInstance(id: ID!): Boolean!                                                              
+  }                                                                                                  
+                                                                                   
+  type ServiceInstance {                                                                             
+      id: ID!                                                                      
+      name: String!                      
+      serviceType: String!                                                                           
+      plan: String!         
+      status: String!                                                                                
+      createdAt: String!                                                           
+  }                 
+                         
+  input CreateInstanceInput {
+      name: String!             
+      serviceType: String!
+      plan: String!                                                                                  
+  }   

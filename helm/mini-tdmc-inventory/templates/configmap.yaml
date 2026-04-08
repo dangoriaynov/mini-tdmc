@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mini-tdmc-inventory.fullname" . }}-config
+  labels:
+    {{- include "mini-tdmc-inventory.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- if .Values.springAutoConfigExclude }}
+  SPRING_AUTOCONFIGURE_EXCLUDE: {{ .Values.springAutoConfigExclude | quote }}
+  {{- end }}
+  {{- if .Values.rabbitmq }}
+  RABBITMQ_ENABLED: {{ .Values.rabbitmq.enabled | quote }}
+  SPRING_RABBITMQ_HOST: {{ .Values.rabbitmq.host | quote }}
+  SPRING_RABBITMQ_PORT: {{ .Values.rabbitmq.port | quote }}
+  SPRING_RABBITMQ_USERNAME: {{ .Values.rabbitmq.username | quote }}
+  SPRING_RABBITMQ_PASSWORD: {{ .Values.rabbitmq.password | quote }}
+  {{- end }}

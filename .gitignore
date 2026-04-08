@@ -1,0 +1,10 @@
+node_modules/
+.terraform/
+terraform.tfstate*
+*.tfstate*
+target/
+.mvn/
+venv/
+*.jar
+.terraform.lock.hcl
+.idea/
