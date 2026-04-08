@@ -4,51 +4,39 @@ A simplified implementation of VMware Tanzu Data Management Console architecture
 
 ## Architecture
 
+```mermaid
+graph TD
+    subgraph cluster["Local K8s Cluster (OrbStack)"]
+        subgraph cp["CONTROL PLANE NAMESPACE"]
+            GW["GraphQL Yoga Gateway<br/>:4000<br/><i>Schema stitching</i>"]
+            INV["Inventory Service<br/>(Spring Boot) :4001<br/><i>GraphQL API + Micrometer</i>"]
+            RMQ["RabbitMQ<br/><i>Event bus</i>"]
+            CON["Connector App<br/>(Node.js)<br/><i>RabbitMQ → K8s CRs</i>"]
+        end
+        subgraph dp["DATA PLANE NAMESPACE"]
+            CR["PostgresInstance CRs<br/><i>CRD: tdmc.tanzu.vmware.com/v1</i>"]
+        end
+        subgraph mon["MONITORING NAMESPACE"]
+            PROM["Prometheus + Grafana<br/><i>kube-prometheus-stack</i>"]
+        end
+    end
+
+    Client(("Client")) --> GW
+    GW -->|"delegates<br/>(stitching)"| INV
+    INV -->|"publishes event"| RMQ
+    RMQ -->|"consumed by"| CON
+    CON -->|"creates CRs"| CR
+    PROM -.->|"scrapes /actuator/prometheus"| INV
+
+    style cp fill:#1a3a5c,stroke:#4a9eff,color:#fff
+    style dp fill:#1a4a2c,stroke:#4aef6f,color:#fff
+    style mon fill:#4a2a1a,stroke:#ef8a4a,color:#fff
+    style cluster fill:#111,stroke:#444,color:#fff
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Local K8s Cluster (OrbStack)                                    │
-│                                                                 │
-│  CONTROL PLANE NAMESPACE                                        │
-│  ┌─────────────────────┐                                        │
-│  │  GraphQL Yoga        │  ← Schema stitching gateway            │
-│  │  Gateway :4000       │    (@graphql-tools/stitch)             │
-│  └──────────┬──────────┘                                        │
-│             │ delegates                                         │
-│             ▼                                                   │
-│  ┌─────────────────────┐     ┌──────────────┐                   │
-│  │ Inventory Service    │────▶│ RabbitMQ      │                   │
-│  │ (Spring Boot) :4001  │     │ (event bus)   │                   │
-│  │                      │     └──────┬───────┘                   │
-│  │ - GraphQL API        │            │                           │
-│  │ - Micrometer metrics │            │ consumed by               │
-│  └─────────────────────┘            ▼                           │
-│                              ┌──────────────────┐               │
-│                              │ Connector App     │               │
-│                              │ (Node.js)         │               │
-│                              │                   │               │
-│                              │ RabbitMQ listener  │               │
-│                              │ → creates K8s CRs │               │
-│                              └────────┬─────────┘               │
-│                                       │                         │
-│  DATA PLANE NAMESPACE                 │ creates                 │
-│  ┌────────────────────────────────────▼──────────────────────┐  │
-│  │  PostgresInstance Custom Resources                         │  │
-│  │  (CRD: tdmc.tanzu.vmware.com/v1)                          │  │
-│  │                                                            │  │
-│  │  $ kubectl get pgi -n mini-tdmc-data-plane                 │  │
-│  │  NAME           PHASE   SERVICE      PLAN    AGE           │  │
-│  │  pgi-f7853e80           POSTGRESQL   large   13s           │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  MONITORING NAMESPACE                                           │
-│  ┌──────────────────────────────────────┐                       │
-│  │ Prometheus + Grafana                  │                       │
-│  │ (kube-prometheus-stack)               │                       │
-│  │ ServiceMonitor → scrapes /actuator/prometheus                │
-│  └──────────────────────────────────────┘                       │
-│                                                                 │
-│  Provisioned by: Terraform    Packaged as: Helm charts          │
-└─────────────────────────────────────────────────────────────────┘
+
+### Event Flow
+```
+Client → Gateway (:4000) → Inventory Service (:4001) → RabbitMQ → Connector → PostgresInstance CRD
 ```
 
 ## How This Maps to Real TDMC
@@ -114,12 +102,21 @@ This runs all setup steps (~3-5 minutes): provisions infrastructure, builds imag
 This creates a PostgreSQL instance through the full pipeline and shows every hop:
 `Client → Gateway → Inventory Service → RabbitMQ → Connector → K8s CRD`
 
-### Access Grafana
+### Browser access (started automatically by deploy scripts)
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Grafana (dashboards + metrics) | http://localhost:3000 | `admin` / `admin` |
+| RabbitMQ Management (queues) | http://localhost:15672 | `guest` / `guest` |
+| GraphQL Playground (API) | http://localhost:4000/graphql | — |
+
+Port-forwards are started automatically by `03-deploy-all.sh` and `quick-start.sh`. If they die, restart manually:
 
 ```bash
-kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80 &
+kubectl port-forward -n mini-tdmc-control-plane svc/rabbitmq 15672:15672 &
+kubectl port-forward -n mini-tdmc-control-plane svc/gateway 4000:4000 &
 ```
-Open http://localhost:3000 — login: `admin` / `admin`
 
 ### Useful commands
 
@@ -130,14 +127,128 @@ kubectl logs -n mini-tdmc-control-plane -l app=connector --tail=10   # Connector
 kubectl logs -n mini-tdmc-control-plane -l app.kubernetes.io/name=mini-tdmc-inventory --tail=10  # Inventory logs
 ```
 
-## Event Flow
+## Event Flow — Step by Step Verification
 
-1. Client sends `createInstance` GraphQL mutation to **Gateway** (:4000)
-2. Gateway delegates to **Inventory Service** (:4001) via schema stitching
-3. Inventory Service saves intent and publishes event to **RabbitMQ** (`tdmc.tasks` exchange, `instance.create` routing key)
-4. **Connector App** consumes the event from RabbitMQ queue
-5. Connector creates a `PostgresInstance` **Custom Resource** in the data plane namespace
-6. (In real TDMC: Operator would reconcile the CR and provision the actual database)
+### Step 1: Create an instance via GraphQL Gateway
+
+Open http://localhost:4000/graphql and run:
+
+```graphql
+mutation {
+  createInstance(input: {
+    name: "demo-postgres"
+    serviceType: "POSTGRESQL"
+    plan: "large"
+  }) {
+    id
+    name
+    serviceType
+    plan
+    status
+    createdAt
+  }
+}
+```
+
+**Expected:** Response with `"status": "PENDING"` and a UUID `id`. The Gateway (:4000) delegated this to the Inventory Service (:4001) via schema stitching.
+
+### Step 2: Verify the event was published to RabbitMQ
+
+Check the Inventory Service logs:
+
+```bash
+kubectl logs -n mini-tdmc-control-plane -l app.kubernetes.io/name=mini-tdmc-inventory --tail=5
+```
+
+**Expected:** `Published CREATE event for instance <uuid> to tdmc.tasks/instance.create`
+
+Open http://localhost:15672 (guest/guest) → **Queues and Streams** tab → click `tdmc.tasks.instance.create`. You'll see message rates and the queue depth. If the Connector is running, messages are consumed immediately (rate in = rate out).
+
+### Step 3: Verify the Connector processed the event
+
+```bash
+kubectl logs -n mini-tdmc-control-plane -l app=connector --tail=5
+```
+
+**Expected:**
+```
+Received event: CREATE for demo-postgres
+Created PostgresInstance CR: pgi-<uuid> in mini-tdmc-data-plane
+Acknowledged message for demo-postgres
+```
+
+### Step 4: Verify the Custom Resource was created in the data plane
+
+```bash
+kubectl get pgi -n mini-tdmc-data-plane
+```
+
+**Expected:**
+```
+NAME           PHASE   SERVICE      PLAN    AGE
+pgi-xxxxxxxx           POSTGRESQL   large   10s
+```
+
+Inspect the full CR:
+
+```bash
+kubectl describe pgi -n mini-tdmc-data-plane
+```
+
+### Step 5: Query all instances via GraphQL
+
+Open http://localhost:4000/graphql and run:
+
+```graphql
+{
+  instances {
+    id
+    name
+    serviceType
+    plan
+    status
+    createdAt
+  }
+}
+```
+
+**Expected:** Array containing all instances you've created.
+
+### Step 6: Verify observability in Grafana
+
+Open http://localhost:3000 (admin/admin) → **Explore** (left sidebar) → select **Prometheus** data source.
+
+**Application metrics** — verify Micrometer is exporting:
+```
+application_ready_time_seconds{application="inventory-service"}
+```
+**Expected:** A value around 10-15 (Spring Boot startup time in seconds).
+
+**HTTP request metrics** — verify API calls are tracked:
+```
+http_server_requests_seconds_count{application="inventory-service"}
+```
+**Expected:** A counter that increases each time you run a GraphQL query.
+
+**JVM memory** — verify JVM health:
+```
+jvm_memory_used_bytes{application="inventory-service", area="heap"}
+```
+**Expected:** Heap usage graph (typically 50-150MB).
+
+**K8s dashboards** — go to **Dashboards** → **Kubernetes / Compute Resources / Namespace (Pods)** → select namespace `mini-tdmc-control-plane`. Shows CPU and memory for all pods.
+
+### Full flow summary
+
+```
+Client
+  → GraphQL Gateway (:4000)           — schema stitching
+  → Inventory Service (:4001)         — saves intent, publishes event
+  → RabbitMQ (tdmc.tasks exchange)    — routes via "instance.create" key
+  → Connector App                     — consumes event from queue
+  → PostgresInstance CRD              — created in data-plane namespace
+  → (Real TDMC: Operator reconciles)  — provisions actual database
+```
 
 ## Project Structure
 
