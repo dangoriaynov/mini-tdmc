@@ -244,6 +244,12 @@ jvm_memory_used_bytes{application="inventory-service", area="heap"}
 
 *Kubernetes / Compute Resources / Pod dashboard showing the Inventory Service CPU usage with requests (0.250 cores) and limits (0.500 cores). CPU Throttling shows "No data" — the pod has sufficient CPU headroom. If CPU limit were too low, throttling would appear here and cause latency spikes — a common issue in production K8s deployments.*
 
+### Grafana: RED Method — Request Rate per Endpoint
+
+![Grafana RED Metrics](docs/screenshots/grafana-red-metrics.png)
+
+*Prometheus Explore view showing `rate(http_server_requests_seconds_count[5m])` — the "R" in RED (Rate, Errors, Duration). Each line represents a different HTTP endpoint on the Inventory Service. The green line (highest rate ~0.015 req/s) is the GraphQL endpoint handling mutations and queries. The yellow line is the health check (readiness probe hitting `/actuator/health` every 5 seconds). The spike around 07:45 corresponds to manual testing. In a production TDMC environment, a sudden drop in rate indicates the service is down or overloaded; a spike in the error-rate equivalent (`status=~"5.."`) indicates a downstream dependency failure (database, RabbitMQ).*
+
 ### Full flow summary
 
 ```
