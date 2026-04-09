@@ -57,7 +57,7 @@ Client → Gateway (:4000) → Inventory Service (:4001) → RabbitMQ → Connec
 | Layer | Technology |
 |-------|-----------|
 | API Gateway | GraphQL Yoga v5, @graphql-tools/stitch (Node.js) |
-| Backend | Spring Boot 3.5, Spring GraphQL, Spring AMQP (Java 21) |
+| Backend | Spring Boot 3.5.13, Spring GraphQL, Spring AMQP (Java 21) |
 | Event Bus | RabbitMQ 3.13 (TopicExchange, routing keys) |
 | Data Plane | Kubernetes Custom Resources (CRD), @kubernetes/client-node |
 | Observability | Prometheus, Grafana, Micrometer, ServiceMonitor CRDs |
@@ -268,16 +268,39 @@ Client
 mini-tdmc/
 ├── services/
 │   ├── inventory-service/       # Java/Spring Boot — Control Plane API
+│   │   ├── src/main/java/       #   GraphQL controller, RabbitMQ publisher, config
+│   │   ├── src/main/resources/  #   GraphQL schema, application.properties
+│   │   └── Dockerfile           #   Multi-stage build (JDK → JRE)
 │   ├── connector-app/           # Node.js — RabbitMQ → K8s CRs bridge
+│   │   ├── src/index.js         #   RabbitMQ listener, K8s CR creation, idempotency
+│   │   └── Dockerfile
 │   └── gateway/                 # Node.js — GraphQL Yoga stitching gateway
+│       ├── src/index.js         #   Schema stitching via @graphql-tools/stitch
+│       └── Dockerfile
 ├── k8s/
-│   ├── base/                    # K8s manifests (deployments, services, RBAC)
-│   └── crds/                    # Custom Resource Definitions
+│   ├── base/                    # K8s manifests
+│   │   ├── rabbitmq.yaml        #   StatefulSet + Service
+│   │   ├── gateway.yaml         #   Deployment + Service
+│   │   ├── connector.yaml       #   Deployment + ServiceAccount + RBAC
+│   │   └── servicemonitor.yaml  #   Prometheus scrape target
+│   └── crds/
+│       └── postgresinstance-crd.yaml  # PostgresInstance CRD (tdmc.tanzu.vmware.com/v1)
 ├── helm/
 │   └── mini-tdmc-inventory/     # Helm chart for Inventory Service
-├── terraform/                   # IaC — provisions namespaces + Helm releases
+│       ├── templates/           #   Go-templated K8s manifests
+│       └── values.yaml          #   Configurable values (image, resources, RabbitMQ)
+├── terraform/
+│   ├── providers.tf             # K8s + Helm providers
+│   └── main.tf                  # Namespaces + Helm release
+├── scripts/
+│   ├── quick-start.sh           # One-command full setup
+│   ├── 01-setup-cluster.sh      # Terraform + CRD + RabbitMQ
+│   ├── 02-build-images.sh       # Docker build all services
+│   ├── 03-deploy-all.sh         # Deploy + port-forwards
+│   ├── 04-demo.sh               # Full E2E demo with output
+│   └── 05-teardown.sh           # Clean removal
 └── docs/
-    └── superpowers/specs/       # Design specification
+    └── screenshots/             # Grafana dashboard screenshots
 ```
 
 ## Key Concepts Demonstrated
