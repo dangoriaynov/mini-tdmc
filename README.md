@@ -238,6 +238,12 @@ jvm_memory_used_bytes{application="inventory-service", area="heap"}
 
 **K8s dashboards** — go to **Dashboards** → **Kubernetes / Compute Resources / Namespace (Pods)** → select namespace `mini-tdmc-control-plane`. Shows CPU and memory for all pods.
 
+### Grafana: Pod CPU Usage Dashboard
+
+![Grafana CPU Usage](docs/screenshots/grafana-cpu-usage.png)
+
+*Kubernetes / Compute Resources / Pod dashboard showing the Inventory Service CPU usage with requests (0.250 cores) and limits (0.500 cores). CPU Throttling shows "No data" — the pod has sufficient CPU headroom. If CPU limit were too low, throttling would appear here and cause latency spikes — a common issue in production K8s deployments.*
+
 ### Full flow summary
 
 ```
